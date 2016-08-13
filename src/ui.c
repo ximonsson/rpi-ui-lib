@@ -4,12 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-
 #define LCD 0
 #define FRAGMENT_SHADER_FILE "src/shaders/fragment.frag"
 #define VERTEX_SHADER_FILE "src/shaders/vertex.vert"
 #define N_CHILDREN_ALLOC 8
-
 
 typedef rpi_widget* WIDGET;
 
@@ -43,7 +41,6 @@ static GLuint       program,
                     texture_vbo,
                     modelview_uniform;
 
-
 /* Default texture coordinates */
 static GLfloat texture_coords[6 * 2] =
 {
@@ -56,14 +53,12 @@ static GLfloat texture_coords[6 * 2] =
 };
 
 /* Default vertex coordinates. */
-static GLfloat vertex_coords[6 * 3] =
+static GLfloat vertex_coords[4 * 3] =
 {
 	-1.0, -1.0,  0.0,
-	-1.0,  1.0,  0.0,
-	 1.0,  1.0,  0.0,
-	 1.0,  1.0,  0.0,
 	 1.0, -1.0,  0.0,
-	-1.0, -1.0,  0.0
+	-1.0,  1.0,  0.0,
+	 1.0,  1.0,  0.0
 };
 
 
@@ -73,16 +68,10 @@ static GLfloat vertex_coords[6 * 3] =
 */
 static void render_sub_tree (NODE node)
 {
-	int i = 0;
-
-	// TODO set up context in shader
-
- 	// first draw all children
-	for (i = 0; i < node->nchildren; i ++)
-		rpi_widget_draw (node->children[i]->widget);
-
-	// then
-	for (i = 0; i < node->nchildren; i ++)
+	// TODO set up correct inherited context in shader
+	rpi_widget_draw (node->widget);
+	// render children
+	for (int i = 0; i < node->nchildren; i ++)
 		render_sub_tree (node->children[i]);
 }
 
@@ -147,6 +136,10 @@ int rpi_widget_init (WIDGET widget, WIDGET parent)
 	// no texture
 	widget->texture = 0;
 	// eye matrix
+	memset (widget->model, 0, sizeof (GLfloat[4][4]));
+	widget->model[0][0] = 1.f;
+	widget->model[1][1] = 1.f;
+	widget->model[2][2] = 1.f;
 	widget->model[3][3] = 1.f;
 
 	memset (widget->text, 0, RPI_MAX_TEXT_LENGTH);
@@ -167,17 +160,24 @@ int rpi_widget_init (WIDGET widget, WIDGET parent)
 	return 0;
 }
 
+void rpi_widget_draw (WIDGET widget)
+{
+	// glBindTexture      (GL_TEXTURE_2D, widget->texture);
+	glUniformMatrix4fv (modelview_uniform, 1, GL_FALSE, (GLfloat*) widget->model);
+	glUniform4f        (color_uniform, widget->r, widget->g, widget->b, widget->a);
+	glDrawArrays       (GL_TRIANGLE_STRIP, 0, 4);
+}
 
 /**
  *  Read source file and compile shader.
  */
-static int compile_shader(const char* source_file, GLuint* shader, GLuint shader_type)
+static int compile_shader(const char* source_file, GLuint* shader, GLenum shader_type)
 {
 	int result;
 	FILE* fp = fopen (source_file, "rb");
 	if (!fp)
 	{
-		fprintf (stderr, "could not open vertex shader file\n");
+		fprintf (stderr, "could not open shader file [%s]\n", source_file);
 		return 1;
 	}
 	fseek (fp, 0, SEEK_END);
@@ -186,14 +186,17 @@ static int compile_shader(const char* source_file, GLuint* shader, GLuint shader
 	char* source = (char*) malloc (file_size);
 	memset (source, 0, file_size);
 
-	if ((result = fread (source, 1, file_size - 1, fp)) != file_size - 1)
+	if ((result = fread (source, 1, file_size, fp)) != file_size)
 	{
-		fprintf (stderr, "could not read entire vertex shader (only got %d out of %d bytes)\n", result, file_size);
+		fprintf (stderr, "could not read entire shader (only got %d out of %d bytes)\n", result, file_size);
 		return 1;
 	}
 	fclose (fp);
 
 	*shader = glCreateShader (shader_type);
+	if (*shader == 0)
+		return 1;
+
 	glShaderSource (*shader, 1, (const char**) &source, 0);
 
 	int status;
@@ -215,30 +218,14 @@ static int compile_shader(const char* source_file, GLuint* shader, GLuint shader
 	return 0;
 }
 
-
 /**
- * Compile shaders and create shader program.
+ *	Initialize EGL.
  */
-static int build_shader_program ()
-{
-	// compile shader source
-	if (compile_shader (VERTEX_SHADER_FILE, &vertexshader, GL_VERTEX_SHADER) != 0 ||
-		compile_shader (FRAGMENT_SHADER_FILE, &fragmentshader, GL_FRAGMENT_SHADER) != 0)
-	{
-		return 1;
-	}
-	// create the shader program and attach the shaders
-	program = glCreateProgram ();
-	glAttachShader (program, fragmentshader);
-	glAttachShader (program, vertexshader);
-	glLinkProgram  (program);
-	glUseProgram   (program);
-	return 0;
-}
-
-
 static int init_egl ()
 {
+	printf ("initializing EGL\n");
+	bcm_host_init ();
+
 	static
 	EGL_DISPMANX_WINDOW_T       native_window;
 	DISPMANX_ELEMENT_HANDLE_T   dispman_element;
@@ -258,8 +245,13 @@ static int init_egl ()
 		EGL_ALPHA_SIZE,  8,
 		EGL_DEPTH_SIZE, 16,
 		EGL_SAMPLES,     4,
-		EGL_SURFACE_TYPE,
-		EGL_WINDOW_BIT,
+		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+		EGL_NONE
+	};
+
+	static const EGLint context_attributes[] =
+	{
+		EGL_CONTEXT_CLIENT_VERSION, 2,
 		EGL_NONE
 	};
 
@@ -279,14 +271,14 @@ static int init_egl ()
 	assert (result != EGL_FALSE);
 
 	// create rendering context
-	context = eglCreateContext (display, config, EGL_NO_CONTEXT, NULL);
+	context = eglCreateContext (display, config, EGL_NO_CONTEXT, context_attributes);
 	assert (context != EGL_NO_CONTEXT);
 
 	// get display size
 	success = graphics_get_display_size (LCD, &width, &height);
 	assert (success >= 0);
 
-	printf ("display size: %d x %d\n", width, height);
+	printf ("  display size: %d x %d\n", width, height);
 
 	dst_rectangle.x = dst_rectangle.y = 0;
 	dst_rectangle.width  = width;
@@ -327,42 +319,89 @@ static int init_egl ()
 	return 0;
 }
 
+/**
+ * Compile shaders and create shader program.
+ */
+static int build_shader_program ()
+{
+	// compile shader source
+	if (compile_shader (VERTEX_SHADER_FILE, &vertexshader, GL_VERTEX_SHADER) != 0 ||
+		compile_shader (FRAGMENT_SHADER_FILE, &fragmentshader, GL_FRAGMENT_SHADER) != 0)
+	{
+		return 1;
+	}
+	// create the shader program
+	program = glCreateProgram ();
+	if (program == 0)
+		return 1;
 
+	// attach the shaders
+	glAttachShader (program, vertexshader);
+	glAttachShader (program, fragmentshader);
+
+	// link and check status to makes sure it went alright
+	int linked;
+	glLinkProgram  (program);
+	glGetProgramiv (program, GL_LINK_STATUS, &linked);
+    if (!linked)
+	{
+		GLint info_length = 0;
+		glGetProgramiv (program, GL_INFO_LOG_LENGTH, &info_length);
+		if(info_length > 1)
+		{
+			char* info_log = malloc (sizeof (char) * info_length);
+			glGetProgramInfoLog (program, info_length, NULL, info_log);
+			fprintf (stderr, "Error linking program:\n%s\n", info_log);
+			free (info_log);
+		}
+		glDeleteProgram (program);
+		return 1;
+	}
+	glUseProgram (program);
+	return 0;
+}
+
+/**
+ *	Initialize OpenGL.
+ */
 static void init_opengl ()
 {
-	build_shader_program ();
+	printf ("initializing OpenGL\n");
+	if (build_shader_program () != 0)
+		exit (1);
 
-	glEnable        (GL_TEXTURE_2D);
-
-	glMatrixMode    (GL_PROJECTION);
 	glViewport      (0, 0, width, height);
-	glOrthof        (0, 1, 0, 1, -10, 10);
-	glClearColor    (0.1f, 0.2f, 0.2f, 1.f);
+	glMatrixMode    (GL_PROJECTION);
+	glLoadIdentity  ();
+	glOrthof        (-1.f, 1.f, -1.f, 1.f, -10.f, 10.f);
 
-	// generate vertex buffer for vertices and texture coords
-	glGenBuffers	(1, &vertex_vbo);
-	glGenBuffers 	(1, &texture_vbo);
-
-	glBindBuffer 	(GL_ARRAY_BUFFER, texture_vbo);
-	glBufferData	(GL_ARRAY_BUFFER, 6 * 2 * sizeof (GLfloat), texture_coords, GL_STATIC_DRAW);
-
-	glBindBuffer (GL_ARRAY_BUFFER, vertex_vbo);
-	glBufferData (GL_ARRAY_BUFFER, 6 * 3 * sizeof (GLfloat), vertex_coords, GL_STATIC_DRAW);
+	// generate vertex buffer for vertices
 	GLuint vertex_attrib_location = glGetAttribLocation (program, "vertex");
+	glGenBuffers              (1, &vertex_vbo);
+	glBindBuffer              (GL_ARRAY_BUFFER, vertex_vbo);
+	glBufferData              (GL_ARRAY_BUFFER, 4 * 3 * sizeof (GLfloat), vertex_coords, GL_STATIC_DRAW);
 	glEnableVertexAttribArray (vertex_attrib_location);
-	glVertexAttribPointer (vertex_attrib_location, 3, GL_FLOAT, 0, 0, 0);
+	glVertexAttribPointer     (vertex_attrib_location, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-	glBindBuffer (GL_ARRAY_BUFFER, texture_vbo);
-	glBufferData (GL_ARRAY_BUFFER, 6 * 2 * sizeof (GLfloat), texture_coords, GL_STATIC_DRAW);
+	// generate vertex buffer for texture coordinates
 	GLuint texture_attrib_location = glGetAttribLocation (program, "texture_coords_in");
+	glGenBuffers              (1, &texture_vbo);
+	glBindBuffer              (GL_ARRAY_BUFFER, texture_vbo);
+	glBufferData              (GL_ARRAY_BUFFER, 6 * 2 * sizeof (GLfloat), texture_coords, GL_STATIC_DRAW);
 	glEnableVertexAttribArray (texture_attrib_location);
-	glVertexAttribPointer (texture_attrib_location, 2, GL_FLOAT, 0, 0, 0);
+	glVertexAttribPointer     (texture_attrib_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
+	glEnable     (GL_TEXTURE_2D);
+	glClearColor (0.1f, 0.1f, 0.1f, 1.f);
+
+	// set texture uniform location (only one texture support at the moment)
 	glUniform1i (glGetUniformLocation (program, "tex"), 0);
 
+	// get color uniform location, and initialize the color to white
 	color_uniform = glGetUniformLocation (program, "color_in");
 	glUniform4f (color_uniform, 1.0, 1.0, 1.0, 1.0);
 
+	// get model view matrix uniform location.
 	modelview_uniform = glGetUniformLocation (program, "modelview");
 }
 
@@ -384,39 +423,10 @@ static void destroy_opengl ()
 }
 
 
-int rpi_init_screen ()
-{
-	if (init_egl() != 0)
-		return 1;
-	init_opengl ();
-	return 0;
-}
-
-
-int rpi_deinit_screen ()
-{
-	destroy_opengl ();
-	destroy_egl ();
-	return 0;
-}
-
-
-void rpi_render_screen ()
-{
-	glMatrixMode    (GL_MODELVIEW);
-	glClear         (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glLoadIdentity  ();
-	// draw widgets !
-	render_sub_tree (&root);
-	eglSwapBuffers  (display, surface);
-}
-
-
 int rpi_create_image (GLuint texture, void** egl_image)
 {
 	glBindTexture (GL_TEXTURE_2D, texture);
-	*egl_image = eglCreateImageKHR
-	(
+	*egl_image = eglCreateImageKHR (
 		display,
 		context,
 		EGL_GL_TEXTURE_2D_KHR,
@@ -428,5 +438,34 @@ int rpi_create_image (GLuint texture, void** egl_image)
 		fprintf (stderr, "eglCreateImageKHR failed\n");
 		return 1;
 	}
+	return 0;
+}
+
+
+int rpi_init_screen ()
+{
+	if (init_egl() != 0)
+		return 1;
+	init_opengl ();
+	return 0;
+}
+
+
+void rpi_render_screen ()
+{
+	glClear         (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glMatrixMode    (GL_MODELVIEW);
+	glLoadIdentity  ();
+	// draw widgets !
+	for (int i = 0; i < root.nchildren; i ++)
+		render_sub_tree (root.children[i]);
+	eglSwapBuffers  (display, surface);
+}
+
+
+int rpi_deinit_screen ()
+{
+	destroy_opengl ();
+	destroy_egl ();
 	return 0;
 }

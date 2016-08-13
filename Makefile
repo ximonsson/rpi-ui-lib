@@ -69,6 +69,9 @@ lib: $(LIBRARY)
 
 bin: $(EXEC)
 
+test:
+	$(CC) $(CFLAGS) $(INCLUDES) -o test.out triangle.c $(LIB_PATH) $(LIBS)
+
 $(BUILD)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<

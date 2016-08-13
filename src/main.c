@@ -4,8 +4,6 @@
 
 int main (int argc, char** argv)
 {
-    bcm_host_init();
-
 	int res;
 	if ((res = rpi_init_screen ()) != 0)
 	{
@@ -20,7 +18,7 @@ int main (int argc, char** argv)
 		return 1;
 	}
 	rpi_widget_resize (&widget, .5f, .5f);
-	rpi_widget_set_color (&widget, .2f, .6f, .8f, 1.f);
+	rpi_widget_set_color (&widget, 1.f, .2f, .4f, 1.f);
 
 	int i;
     for (i = 0; i < 5; i ++)

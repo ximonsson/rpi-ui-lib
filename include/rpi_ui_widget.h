@@ -6,10 +6,13 @@
 #include "EGL/eglext.h"
 #include "bcm_host.h"
 
+#define RPI_MAX_TEXT_LENGTH 1024
 
-#define RPI_MAX_TEXT_LENGTH     1024
-
-
+/**
+ * rpi_ui_text_alignment enumerates different possible text alignments for text widgets.
+ * The rendered text will be positioned correctly within the widget's boundaries to respect
+ * the set aligment.
+ */
 typedef enum alignment
 {
 	text_center,
@@ -17,7 +20,6 @@ typedef enum alignment
 	text_right,
 }
 rpi_ui_text_alignment;
-
 
 /**
  *  RPI UI Widget.

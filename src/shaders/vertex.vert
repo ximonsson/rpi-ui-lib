@@ -1,12 +1,11 @@
-#version 300 es
+attribute vec3 vertex;
 
-in vec4 color_in;
-in vec3 vertex;
-in vec2 texture_coords_in;
-in mat4 modelview;
+uniform vec2 texture_coords_in;
+uniform mat4 modelview;
+uniform vec4 color_in;
 
-out vec2 texture_coords;
-out vec4 color;
+varying vec4 color;
+varying vec2 texture_coords;
 
 void main ()
 {
