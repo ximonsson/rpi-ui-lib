@@ -4,7 +4,7 @@ SRCDIR	= src
 BUILD	= build
 LIB     = lib
 LIBRARY = $(LIB)/librpi_ui.a
-SRC		= ui.c widgets.c utils.c
+SRC		= ui.c widget.c
 OBJ		= $(addprefix $(BUILD)/, $(SRC:.c=.o))
 EXEC	= bin/gui
 

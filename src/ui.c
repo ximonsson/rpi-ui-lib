@@ -169,56 +169,6 @@ void rpi_widget_draw (WIDGET widget)
 }
 
 /**
- *  Read source file and compile shader.
- */
-static int compile_shader(const char* source_file, GLuint* shader, GLenum shader_type)
-{
-	int result;
-	FILE* fp = fopen (source_file, "rb");
-	if (!fp)
-	{
-		fprintf (stderr, "could not open shader file [%s]\n", source_file);
-		return 1;
-	}
-	fseek (fp, 0, SEEK_END);
-	int file_size = ftell (fp);
-	rewind (fp);
-	char* source = (char*) malloc (file_size);
-	memset (source, 0, file_size);
-
-	if ((result = fread (source, 1, file_size, fp)) != file_size)
-	{
-		fprintf (stderr, "could not read entire shader (only got %d out of %d bytes)\n", result, file_size);
-		return 1;
-	}
-	fclose (fp);
-
-	*shader = glCreateShader (shader_type);
-	if (*shader == 0)
-		return 1;
-
-	glShaderSource (*shader, 1, (const char**) &source, 0);
-
-	int status;
-	glCompileShader (*shader);
-	glGetShaderiv (*shader, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE)
-	{
-		GLint log_size = 0;
-		glGetShaderiv (vertexshader, GL_INFO_LOG_LENGTH, &log_size);
-
-		char error_log[log_size];
-		glGetShaderInfoLog (vertexshader, log_size, &log_size, error_log);
-
-		fprintf (stderr, "error compiling shader %s\n%s\n", source_file, error_log);
-		return 1;
-	}
-
-	free (source);
-	return 0;
-}
-
-/**
  *	Initialize EGL.
  */
 static int init_egl ()
@@ -320,7 +270,57 @@ static int init_egl ()
 }
 
 /**
- * Compile shaders and create shader program.
+ *  Read source file and compile shader as shader_type.
+ */
+static int compile_shader(const char* source_file, GLuint* shader, GLenum shader_type)
+{
+	int result;
+	FILE* fp = fopen (source_file, "rb");
+	if (!fp)
+	{
+		fprintf (stderr, "could not open shader file [%s]\n", source_file);
+		return 1;
+	}
+	fseek (fp, 0, SEEK_END);
+	int file_size = ftell (fp);
+	rewind (fp);
+	char* source = (char*) malloc (file_size);
+	memset (source, 0, file_size);
+
+	if ((result = fread (source, 1, file_size, fp)) != file_size)
+	{
+		fprintf (stderr, "could not read entire shader (only got %d out of %d bytes)\n", result, file_size);
+		return 1;
+	}
+	fclose (fp);
+
+	*shader = glCreateShader (shader_type);
+	if (*shader == 0)
+		return 1;
+
+	glShaderSource (*shader, 1, (const char**) &source, 0);
+
+	int status;
+	glCompileShader (*shader);
+	glGetShaderiv (*shader, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE)
+	{
+		GLint log_size = 0;
+		glGetShaderiv (vertexshader, GL_INFO_LOG_LENGTH, &log_size);
+
+		char error_log[log_size];
+		glGetShaderInfoLog (vertexshader, log_size, &log_size, error_log);
+
+		fprintf (stderr, "error compiling shader %s\n%s\n", source_file, error_log);
+		return 1;
+	}
+
+	free (source);
+	return 0;
+}
+
+/**
+ * Build the shader program to use.
  */
 static int build_shader_program ()
 {
@@ -405,6 +405,19 @@ static void init_opengl ()
 	modelview_uniform = glGetUniformLocation (program, "modelview");
 }
 
+/**
+ *	rpi_ui_create_texture creates a new texture that can be used by widgets.
+ */
+static void rpi_ui_create_texture (GLuint* texture, int width, int height)
+{
+	glGenTextures   (1, texture);
+	glBindTexture   (GL_TEXTURE_2D, *texture);
+	glTexImage2D    (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
 
 static void destroy_egl ()
 {
