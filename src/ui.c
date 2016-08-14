@@ -26,20 +26,23 @@ typedef struct widget_node* NODE;
 /* root node of the widgets */
 static struct widget_node root;
 
-
+/* Screen dimensions */
 static uint32_t     width,
                     height;
+
+/* EGL components */
 static EGLDisplay   display;
 static EGLSurface   surface;
 static EGLContext   context;
 
+/* OpenGL components */
 static GLuint       program,
                     vertexshader,
                     fragmentshader,
                     color_uniform,
                     vertex_vbo,
                     texture_vbo,
-                    modelview_uniform,
+                    model_uniform,
                     default_texture;
 
 /* Default texture coordinates */
@@ -56,12 +59,11 @@ static GLfloat texture_coords[6 * 2] =
 /* Default vertex coordinates. */
 static GLfloat vertex_coords[4 * 3] =
 {
-	-1.0, -1.0,  0.0,
-	 1.0, -1.0,  0.0,
-	-1.0,  1.0,  0.0,
+	 0.0,  0.0,  0.0,
+	 1.0,  0.0,  0.0,
+	 0.0,  1.0,  0.0,
 	 1.0,  1.0,  0.0
 };
-
 
 /**
  *  Render widget connected to node and continue down its children.
@@ -164,7 +166,7 @@ int rpi_widget_init (WIDGET widget, WIDGET parent)
 void rpi_widget_draw (WIDGET widget)
 {
 	glBindTexture      (GL_TEXTURE_2D, widget->texture);
-	glUniformMatrix4fv (modelview_uniform, 1, GL_FALSE, (GLfloat*) widget->model);
+	glUniformMatrix4fv (model_uniform, 1, GL_FALSE, (GLfloat*) widget->model);
 	glUniform4f        (color_uniform, widget->r, widget->g, widget->b, widget->a);
 	glDrawArrays       (GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -394,10 +396,7 @@ static void init_opengl ()
 	if (build_shader_program () != 0)
 		exit (1);
 
-	glViewport      (0, 0, width, height);
-	glMatrixMode    (GL_PROJECTION);
-	glLoadIdentity  ();
-	glOrthof        (-1.f, 1.f, -1.f, 1.f, -10.f, 10.f);
+	glViewport (0, 0, width, height);
 
 	// generate vertex buffer for vertices
 	GLuint vertex_attrib_location = glGetAttribLocation (program, "vertex");
@@ -426,7 +425,7 @@ static void init_opengl ()
 	glUniform4f (color_uniform, 1.0, 1.0, 1.0, 1.0);
 
 	// get model view matrix uniform location.
-	modelview_uniform = glGetUniformLocation (program, "modelview");
+	model_uniform = glGetUniformLocation (program, "model");
 
 	// generate our default white texture.
 	GLbyte white[4] = {0xff, 0xff, 0xff, 0xff};
