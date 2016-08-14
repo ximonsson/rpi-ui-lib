@@ -43,6 +43,7 @@ static GLuint       program,
                     vertex_vbo,
                     texture_vbo,
                     model_uniform,
+                    view_uniform,
                     default_texture;
 
 /* Default texture coordinates */
@@ -59,10 +60,10 @@ static GLfloat texture_coords[6 * 2] =
 /* Default vertex coordinates. */
 static GLfloat vertex_coords[4 * 3] =
 {
-	 0.0,  0.0,  0.0,
-	 1.0,  0.0,  0.0,
-	 0.0,  1.0,  0.0,
-	 1.0,  1.0,  0.0
+	0.0,  0.0,  0.0,
+	1.0,  0.0,  0.0,
+	0.0,  1.0,  0.0,
+	1.0,  1.0,  0.0
 };
 
 /**
@@ -123,61 +124,6 @@ static NODE new_node (WIDGET widget, NODE parent)
 	// append to parent
 	append_to_children(parent, new_node);
 	return new_node;
-}
-
-
-int rpi_widget_init (WIDGET widget, WIDGET parent)
-{
-	// default color to white
-	widget->r =
-	widget->g =
-	widget->b =
-	widget->a = 1.f;
-	// 0 width and height
-	widget->width =
-	widget->height = 0.f;
-	// no texture
-	widget->texture = default_texture;
-	// eye matrix
-	memset (widget->model, 0, sizeof (GLfloat[4][4]));
-	widget->model[0][0] = 1.f;
-	widget->model[1][1] = 1.f;
-	widget->model[2][2] = 1.f;
-	widget->model[3][3] = 1.f;
-
-	memset (widget->text, 0, RPI_MAX_TEXT_LENGTH);
-	memset (widget->source, 0, RPI_MAX_TEXT_LENGTH);
-
-	widget->parent = parent;
-	// add to node tree
-	// no parent, add to root
-	NODE parent_node = &root;
-	if (parent != NULL)
-	{
-		// traverse tree looking for the node representing the parent
-		parent_node = find_node (parent);
-	}
-	// add the widget to the tree
-	new_node (widget, parent_node);
-
-	return 0;
-}
-
-void rpi_widget_draw (WIDGET widget)
-{
-	glBindTexture      (GL_TEXTURE_2D, widget->texture);
-	glUniformMatrix4fv (model_uniform, 1, GL_FALSE, (GLfloat*) widget->model);
-	glUniform4f        (color_uniform, widget->r, widget->g, widget->b, widget->a);
-	glDrawArrays       (GL_TRIANGLE_STRIP, 0, 4);
-}
-
-int rpi_widget_destroy (WIDGET widget)
-{
-	// TODO remove among parent children
-
-	if (widget->texture != default_texture)
-		glDeleteTextures (1, &widget->texture);
-	return 0;
 }
 
 /**
@@ -376,15 +322,17 @@ static int build_shader_program ()
 /**
  *	rpi_ui_create_texture creates a new texture that can be used by widgets.
  */
-static void generate_texture (GLuint* texture, int width, int height)
+static GLuint generate_texture (int width, int height)
 {
-	glGenTextures   (1, texture);
-	glBindTexture   (GL_TEXTURE_2D, *texture);
+	GLuint texture;
+	glGenTextures   (1, &texture);
+	glBindTexture   (GL_TEXTURE_2D, texture);
 	glTexImage2D    (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	return texture;
 }
 
 /**
@@ -424,12 +372,15 @@ static void init_opengl ()
 	color_uniform = glGetUniformLocation (program, "color_in");
 	glUniform4f (color_uniform, 1.0, 1.0, 1.0, 1.0);
 
-	// get model view matrix uniform location.
+	// get model matrix uniform location.
 	model_uniform = glGetUniformLocation (program, "model");
+
+	// get view matrix uniform location.
+	view_uniform = glGetUniformLocation (program, "view");
 
 	// generate our default white texture.
 	GLbyte white[4] = {0xff, 0xff, 0xff, 0xff};
-	generate_texture (&default_texture, 1, 1);
+	default_texture = generate_texture (1, 1);
 	glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
 }
 
@@ -438,10 +389,10 @@ static void init_opengl ()
  */
 static void destroy_egl ()
 {
-	eglMakeCurrent      (display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-	eglDestroySurface   (display, surface);
-	eglDestroyContext   (display, context);
-	eglTerminate        (display);
+	eglMakeCurrent    (display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	eglDestroySurface (display, surface);
+	eglDestroyContext (display, context);
+	eglTerminate      (display);
 }
 
 /**
@@ -471,13 +422,16 @@ int rpi_create_image (GLuint texture, void** egl_image)
 		fprintf (stderr, "eglCreateImageKHR failed\n");
 		return 1;
 	}
+	else {
+		printf ("new egl image succesfully created\n");
+	}
 	return 0;
 }
 
 
 int rpi_init_screen ()
 {
-	if (init_egl() != 0)
+	if (init_egl () != 0)
 		return 1;
 	init_opengl ();
 	return 0;
@@ -500,5 +454,77 @@ int rpi_deinit_screen ()
 {
 	destroy_opengl ();
 	destroy_egl ();
+	return 0;
+}
+
+/*
+ WIDGETS
+*/
+
+int rpi_widget_init (WIDGET widget, WIDGET parent)
+{
+	// default color to white
+	widget->r =
+	widget->g =
+	widget->b =
+	widget->a = 1.f;
+	// 0 width and height
+	widget->width =
+	widget->height = 0.f;
+	// no texture
+	widget->texture = default_texture;
+	widget->egl_image = NULL;
+	// eye matrix
+	memset (widget->model, 0, sizeof (GLfloat[4][4]));
+	widget->model[0][0] = 1.f;
+	widget->model[1][1] = 1.f;
+	widget->model[2][2] = 1.f;
+	widget->model[3][3] = 1.f;
+
+	memset (widget->text, 0, RPI_MAX_TEXT_LENGTH);
+	memset (widget->source, 0, RPI_MAX_TEXT_LENGTH);
+
+	widget->parent = parent;
+	// add to node tree
+	// no parent, add to root
+	NODE parent_node = &root;
+	if (parent != NULL)
+	{
+		// traverse tree looking for the node representing the parent
+		parent_node = find_node (parent);
+	}
+	// add the widget to the tree
+	new_node (widget, parent_node);
+
+	return 0;
+}
+
+void rpi_widget_draw (WIDGET widget)
+{
+	glBindTexture      (GL_TEXTURE_2D, widget->texture);
+	glUniformMatrix4fv (model_uniform, 1, GL_FALSE, (GLfloat*) widget->model);
+	glUniform4f        (color_uniform, widget->r, widget->g, widget->b, widget->a);
+	glDrawArrays       (GL_TRIANGLE_STRIP, 0, 4);
+}
+
+void rpi_widget_set_jpeg (WIDGET widget, const char* path)
+{
+	rpi_widget_set_source (widget, path);
+	// generate if needed a new texture for the widget to use
+	if (widget->texture == default_texture)
+		widget->texture = generate_texture (1, 1);
+	// create an EGL Image to render to, connected to the texture
+	rpi_create_image (widget->texture, &widget->egl_image);
+}
+
+int rpi_widget_destroy (WIDGET widget)
+{
+	// TODO remove among parent's children
+
+	if (widget->egl_image != NULL)
+		eglDestroyImageKHR (display, (EGLImageKHR) widget->egl_image);
+
+	if (widget->texture != default_texture)
+		glDeleteTextures (1, &widget->texture);
 	return 0;
 }

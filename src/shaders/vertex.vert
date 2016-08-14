@@ -22,7 +22,8 @@ varying vec4 color;
 varying vec2 texture_coords;
 
 // projection matrix to map coordinates 0,0 to the bottom left, and 1,1 to the top right
-mat4 projection = mat4 (
+const mat4 projection = mat4
+(
 	 2.0,  0.0,  0.0,  0.0,
 	 0.0,  2.0,  0.0,  0.0,
 	 0.0,  0.0,  0.0,  0.0,

@@ -56,6 +56,7 @@ typedef struct rpi_widget
 	GLfloat model[4][4];
 
 	GLuint  texture;
+	void*   egl_image;
 
 	char    text[RPI_MAX_TEXT_LENGTH];
 
@@ -123,6 +124,12 @@ void rpi_widget_rotate (rpi_widget* /* widget */,
  *  Setting media source is the same as changing its texture.
  */
 void rpi_widget_set_source (rpi_widget* /* widget */, const char* /* source */) ;
+
+/**
+ *  rpi_widget_set_jpeg decodes and sets the JPEG image at the supplied path as texture
+ *  data for the widget to be used while rendering.
+ */
+void rpi_widget_set_jpeg (rpi_widget* /* widget */, const char* /* path */) ;
 
 /**
  *  Sets text contents of the widget.
