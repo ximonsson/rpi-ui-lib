@@ -82,7 +82,7 @@ $(LIBRARY): $(OBJ)
 
 $(EXEC): lib
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(SRCDIR)/main.c $(LIB_PATH) $(LIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ main.c $(LIB_PATH) $(LIBS)
 
 clean:
 	rm -rf $(BUILD)/*.o $(EXEC) $(LIBRARY)
