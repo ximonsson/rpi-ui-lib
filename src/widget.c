@@ -2,17 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 
-
 typedef rpi_widget* WIDGET;
-
-
-int rpi_widget_destroy (WIDGET widget)
-{
-	// TODO remove among parent children
-	glDeleteTextures (1, &widget->texture);
-	return 0;
-}
-
 
 void rpi_widget_translate (WIDGET widget, GLfloat x, GLfloat y, GLfloat z)
 {

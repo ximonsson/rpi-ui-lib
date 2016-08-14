@@ -1,3 +1,7 @@
+/**
+ *   File: fragment.frag
+ *   Description: Fragment shader source.
+ */
 precision mediump float;
 
 uniform sampler2D tex;
@@ -7,6 +11,5 @@ varying vec4 color;
 
 void main ()
 {
-	// gl_FragColor = texture2D(tex, texture_coords) * color;
-	gl_FragColor = color;
+	gl_FragColor = texture2D (tex, texture_coords) * color;
 }

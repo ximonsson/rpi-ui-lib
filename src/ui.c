@@ -39,7 +39,8 @@ static GLuint       program,
                     color_uniform,
                     vertex_vbo,
                     texture_vbo,
-                    modelview_uniform;
+                    modelview_uniform,
+                    default_texture;
 
 /* Default texture coordinates */
 static GLfloat texture_coords[6 * 2] =
@@ -134,7 +135,7 @@ int rpi_widget_init (WIDGET widget, WIDGET parent)
 	widget->width =
 	widget->height = 0.f;
 	// no texture
-	widget->texture = 0;
+	widget->texture = default_texture;
 	// eye matrix
 	memset (widget->model, 0, sizeof (GLfloat[4][4]));
 	widget->model[0][0] = 1.f;
@@ -162,10 +163,19 @@ int rpi_widget_init (WIDGET widget, WIDGET parent)
 
 void rpi_widget_draw (WIDGET widget)
 {
-	// glBindTexture      (GL_TEXTURE_2D, widget->texture);
+	glBindTexture      (GL_TEXTURE_2D, widget->texture);
 	glUniformMatrix4fv (modelview_uniform, 1, GL_FALSE, (GLfloat*) widget->model);
 	glUniform4f        (color_uniform, widget->r, widget->g, widget->b, widget->a);
 	glDrawArrays       (GL_TRIANGLE_STRIP, 0, 4);
+}
+
+int rpi_widget_destroy (WIDGET widget)
+{
+	// TODO remove among parent children
+
+	if (widget->texture != default_texture)
+		glDeleteTextures (1, &widget->texture);
+	return 0;
 }
 
 /**
@@ -362,6 +372,20 @@ static int build_shader_program ()
 }
 
 /**
+ *	rpi_ui_create_texture creates a new texture that can be used by widgets.
+ */
+static void generate_texture (GLuint* texture, int width, int height)
+{
+	glGenTextures   (1, texture);
+	glBindTexture   (GL_TEXTURE_2D, *texture);
+	glTexImage2D    (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
+/**
  *	Initialize OpenGL.
  */
 static void init_opengl ()
@@ -403,22 +427,16 @@ static void init_opengl ()
 
 	// get model view matrix uniform location.
 	modelview_uniform = glGetUniformLocation (program, "modelview");
+
+	// generate our default white texture.
+	GLbyte white[4] = {0xff, 0xff, 0xff, 0xff};
+	generate_texture (&default_texture, 1, 1);
+	glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
 }
 
 /**
- *	rpi_ui_create_texture creates a new texture that can be used by widgets.
+ *  destroy_egl makes sure to unallocate and free all EGL components.
  */
-static void rpi_ui_create_texture (GLuint* texture, int width, int height)
-{
-	glGenTextures   (1, texture);
-	glBindTexture   (GL_TEXTURE_2D, *texture);
-	glTexImage2D    (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-}
-
 static void destroy_egl ()
 {
 	eglMakeCurrent      (display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -427,12 +445,15 @@ static void destroy_egl ()
 	eglTerminate        (display);
 }
 
-
+/**
+ *  destroy_opengl deinitializes OpenGL components.
+ */
 static void destroy_opengl ()
 {
-	glDeleteShader  (vertexshader);
-	glDeleteShader  (fragmentshader);
-	glDeleteProgram (program);
+	glDeleteShader   (vertexshader);
+	glDeleteShader   (fragmentshader);
+	glDeleteProgram  (program);
+	glDeleteTextures (1, &default_texture);
 }
 
 
