@@ -1,5 +1,6 @@
 #include "rpi_ui.h"
 #include "rpi_ui_widget.h"
+#include "rpi_mp.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -47,14 +48,12 @@ static GLuint       program,
                     default_texture;
 
 /* Default texture coordinates */
-static GLfloat texture_coords[6 * 2] =
+static GLfloat texture_coords[4 * 2] =
 {
-	0.0, 1.0,
-	0.0, 0.0,
-	1.0, 0.0,
-	1.0, 0.0,
-	1.0, 1.0,
-	0.0, 1.0
+	0.f,  1.f,
+	1.f,  1.f,
+	0.f,  0.f,
+	1.f,  0.f
 };
 
 /* Default vertex coordinates. */
@@ -322,12 +321,12 @@ static int build_shader_program ()
 /**
  *	rpi_ui_create_texture creates a new texture that can be used by widgets.
  */
-static GLuint generate_texture (int width, int height)
+static GLuint generate_texture (int width, int height, void* data)
 {
 	GLuint texture;
 	glGenTextures   (1, &texture);
 	glBindTexture   (GL_TEXTURE_2D, texture);
-	glTexImage2D    (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glTexImage2D    (GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -344,28 +343,11 @@ static void init_opengl ()
 	if (build_shader_program () != 0)
 		exit (1);
 
-	glViewport (0, 0, width, height);
-
-	// generate vertex buffer for vertices
-	GLuint vertex_attrib_location = glGetAttribLocation (program, "vertex");
-	glGenBuffers              (1, &vertex_vbo);
-	glBindBuffer              (GL_ARRAY_BUFFER, vertex_vbo);
-	glBufferData              (GL_ARRAY_BUFFER, 4 * 3 * sizeof (GLfloat), vertex_coords, GL_STATIC_DRAW);
-	glEnableVertexAttribArray (vertex_attrib_location);
-	glVertexAttribPointer     (vertex_attrib_location, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-	// generate vertex buffer for texture coordinates
-	GLuint texture_attrib_location = glGetAttribLocation (program, "texture_coords_in");
-	glGenBuffers              (1, &texture_vbo);
-	glBindBuffer              (GL_ARRAY_BUFFER, texture_vbo);
-	glBufferData              (GL_ARRAY_BUFFER, 6 * 2 * sizeof (GLfloat), texture_coords, GL_STATIC_DRAW);
-	glEnableVertexAttribArray (texture_attrib_location);
-	glVertexAttribPointer     (texture_attrib_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
 	glEnable     (GL_TEXTURE_2D);
+	glViewport   (0, 0, width, height);
 	glClearColor (0.1f, 0.1f, 0.1f, 1.f);
 
-	// set texture uniform location (only one texture support at the moment)
+	// set texture uniform location (only support one active texture at the moment)
 	glUniform1i (glGetUniformLocation (program, "tex"), 0);
 
 	// get color uniform location, and initialize the color to white
@@ -380,8 +362,23 @@ static void init_opengl ()
 
 	// generate our default white texture.
 	GLbyte white[4] = {0xff, 0xff, 0xff, 0xff};
-	default_texture = generate_texture (1, 1);
-	glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+	default_texture = generate_texture (1, 1, white);
+
+	// generate vertex buffer for vertices
+	GLuint vertex_attrib_location = glGetAttribLocation (program, "vertex");
+	glGenBuffers              (1, &vertex_vbo);
+	glBindBuffer              (GL_ARRAY_BUFFER, vertex_vbo);
+	glBufferData              (GL_ARRAY_BUFFER, 4 * 3 * sizeof (GLfloat), vertex_coords, GL_STATIC_DRAW);
+	glEnableVertexAttribArray (vertex_attrib_location);
+	glVertexAttribPointer     (vertex_attrib_location, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	// generate vertex buffer for texture coordinates
+	GLuint texture_attrib_location = glGetAttribLocation (program, "texture_coords_in");
+	glGenBuffers              (1, &texture_vbo);
+	glBindBuffer              (GL_ARRAY_BUFFER, texture_vbo);
+	glBufferData              (GL_ARRAY_BUFFER, 4 * 2 * sizeof (GLfloat), texture_coords, GL_STATIC_DRAW);
+	glEnableVertexAttribArray (texture_attrib_location);
+	glVertexAttribPointer     (texture_attrib_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
 }
 
 /**
@@ -400,10 +397,12 @@ static void destroy_egl ()
  */
 static void destroy_opengl ()
 {
+	glDeleteTextures (1, &default_texture);
+	glDeleteBuffers  (1, &vertex_vbo);
+	glDeleteBuffers  (1, &texture_vbo);
 	glDeleteShader   (vertexshader);
 	glDeleteShader   (fragmentshader);
 	glDeleteProgram  (program);
-	glDeleteTextures (1, &default_texture);
 }
 
 
@@ -434,6 +433,8 @@ int rpi_init_screen ()
 	if (init_egl () != 0)
 		return 1;
 	init_opengl ();
+	if (rpi_mp_init () != 0)
+		return 1;
 	return 0;
 }
 
@@ -507,14 +508,60 @@ void rpi_widget_draw (WIDGET widget)
 	glDrawArrays       (GL_TRIANGLE_STRIP, 0, 4);
 }
 
-void rpi_widget_set_jpeg (WIDGET widget, const char* path)
+void rpi_widget_image_open (WIDGET widget, const char* path)
 {
 	rpi_widget_set_source (widget, path);
 	// generate if needed a new texture for the widget to use
 	if (widget->texture == default_texture)
-		widget->texture = generate_texture (1, 1);
+		widget->texture = generate_texture (1, 1, NULL);
 	// create an EGL Image to render to, connected to the texture
 	rpi_create_image (widget->texture, &widget->egl_image);
+}
+
+int rpi_widget_video_open (WIDGET widget, const char* path, pthread_mutex_t** mut, pthread_cond_t** cond)
+{
+	rpi_widget_set_source (widget, path);
+	// start by opening video source
+	int w, h;
+	int64_t dur;
+	if (rpi_mp_open (path, &w, &h, &dur, RENDER_VIDEO_TO_TEXTURE) != 0)
+	{
+		fprintf (stderr, "failed to open video source\n");
+		return 1;
+	}
+	if (widget->texture == default_texture)
+	{
+		// create a new texture to be rendered to
+		widget->texture = generate_texture (w, h, NULL);
+		// create a new EGL image that will be used for the video components
+		if (rpi_create_image (widget->texture, &widget->egl_image) != 0)
+		{
+			// if we failed to create a target EGL image return
+			rpi_mp_stop ();
+			return 1;
+		}
+	}
+	// setup media player to render to the image
+	rpi_mp_setup_render_buffer (widget->egl_image, mut, cond);
+	return 0;
+}
+
+void rpi_widget_video_stop (WIDGET widget)
+{
+	// stop the player
+	rpi_mp_stop ();
+	// free gpu memory by destroying the image
+	if (widget->egl_image != NULL)
+		eglDestroyImageKHR (display, (EGLImageKHR) widget->egl_image);
+}
+
+void rpi_widget_video_start (WIDGET widget)
+{
+	rpi_mp_start ();
+}
+
+void rpi_widget_video_pause (WIDGET widget) {
+	rpi_mp_pause ();
 }
 
 int rpi_widget_destroy (WIDGET widget)

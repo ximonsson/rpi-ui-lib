@@ -58,11 +58,11 @@ typedef struct rpi_widget
 	GLuint  texture;
 	void*   egl_image;
 
-	char    text[RPI_MAX_TEXT_LENGTH];
+	char text[RPI_MAX_TEXT_LENGTH];
 
-	char    source[RPI_MAX_TEXT_LENGTH];
+	char source[RPI_MAX_TEXT_LENGTH];
 
-	int     visible;
+	int visible;
 
 	struct rpi_widget* parent;
 }
@@ -129,7 +129,33 @@ void rpi_widget_set_source (rpi_widget* /* widget */, const char* /* source */) 
  *  rpi_widget_set_jpeg decodes and sets the JPEG image at the supplied path as texture
  *  data for the widget to be used while rendering.
  */
-void rpi_widget_set_jpeg (rpi_widget* /* widget */, const char* /* path */) ;
+void rpi_widget_image_open (rpi_widget* /* widget */, const char* /* path */) ;
+
+/**
+ *  rpi_widget_set_video makes this widget render a video from the specified source.
+ *  The pthread variables are for knowing when a frame is ready to be rendered.
+ */
+int rpi_widget_video_open (rpi_widget*       /* widget */,
+                           const char*       /* source */,
+                           pthread_mutex_t** /* mutex */,
+                           pthread_cond_t**  /* cond */) ;
+
+/**
+ *  rpi_widget_video_start starts playback of the video loaded to the widget.
+ *  rpi_widget_video_open needs to be called prior to this function or there will be an error.
+ */
+void rpi_widget_video_start (rpi_widget* /* widget */) ;
+
+/**
+ *  rpi_widget_video_pause toggles pause state for playback of the video currently loaded to this widget.
+ */
+void rpi_widget_video_pause (rpi_widget* /* widget */) ;
+
+/**
+ *  rpi_widget_video_stop stops entirely playback for video loaded to this widget.
+ *  To restart the video it needs to be reopened and started a new.
+ */
+void rpi_widget_video_stop (rpi_widget* /* widget */) ;
 
 /**
  *  Sets text contents of the widget.

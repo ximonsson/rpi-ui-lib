@@ -5,11 +5,11 @@
 
 // input vertex coordinate.
 attribute vec3 vertex;
+// input texture coordinates
+attribute vec2 texture_coords_in;
 
 // input color
 uniform vec4 color_in;
-// input texture coordinates
-uniform vec2 texture_coords_in;
 // modelview matrix of the component we are rendering
 uniform mat4 model;
 // modelview matrix of the room the component is rendered in,

@@ -2,7 +2,7 @@
  *   File: fragment.frag
  *   Description: Fragment shader source.
  */
-precision mediump float;
+precision highp float;
 
 uniform sampler2D tex;
 

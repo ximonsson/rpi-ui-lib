@@ -15,11 +15,11 @@ endif
 
 # if we are cross compiling
 ifdef CROSS
-CC      = arm-linux-gnueabihf-gcc
-AR      = arm-linux-gnueabihf-ar
-SYSROOT = $(HOME)/mnt/penguin
-CFLAGS += -mfloat-abi=hard -march=armv6 -mfpu=vfp -marm --sysroot=$(SYSROOT)
-VC      = $(SYSROOT)/opt/vc
+CC       = arm-linux-gnueabihf-gcc
+AR       = arm-linux-gnueabihf-ar
+SYSROOT  = $(HOME)/mnt/penguin
+VC       = $(SYSROOT)/opt/vc
+CFLAGS  += -mfloat-abi=hard -march=armv6 -mfpu=vfp -marm --sysroot=$(SYSROOT)
 endif
 
 
@@ -52,6 +52,7 @@ CFLAGS += -Wall \
           -Wno-psabi
 
 INCLUDES = -I./include \
+           -I../rpi-mediaplayer/include \
            -I$(VC)/include \
            -I$(VC)/include/interface/vcos/pthreads \
            -I$(VC)/include/interface/vmcs_host/linux \
@@ -59,11 +60,14 @@ INCLUDES = -I./include \
            -I$(VC)/src/hello_pi/libs/vgfont
 
 LIBRARY_PATH = -L./lib \
+               -L../rpi-mediaplayer/lib \
                -L$(VC)/lib \
                -L$(VC)/src/hello_pi/libs/ilclient \
                -L$(VC)/src/hello_pi/libs/vgfont
 
-LIBS += -lilclient \
+LIBS += -lrpi_ui \
+        -lrpi_mp \
+        -lilclient \
         -lopenmaxil \
         -lbcm_host \
         -lGLESv2 \
@@ -72,10 +76,12 @@ LIBS += -lilclient \
         -lvchiq_arm \
         -lpthread \
         -lrt \
-        -lm \
-        -lrpi_ui
+        -lavcodec \
+        -lavutil \
+        -lavformat \
+        -lm
 
-ARFLAGS = rcs
+ARCMD = rcs
 
 
 all: lib
@@ -86,9 +92,9 @@ bin: $(EXEC)
 
 $(LIBRARY): $(OBJ)
 	@mkdir -p $(@D)
-	$(AR) $(ARFLAGS) $@ $^
+	$(AR) $(ARCMD) $@ $^
 
-$(EXEC): lib
+$(EXEC): $(LIBRARY)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ main.c $(LIBRARY_PATH) $(LIBS)
 
