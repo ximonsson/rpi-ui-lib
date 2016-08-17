@@ -7,6 +7,21 @@ LIBRARY = $(LIB)/librpi_ui.a
 SRC     = ui.c widget.c image.c
 OBJ     = $(addprefix $(BUILD)/, $(SRC:.c=.o))
 EXEC    = bin/gui
+VC      = /opt/vc
+
+ifdef VERBOSE
+CFLAGS += -v
+endif
+
+# if we are cross compiling
+ifdef CROSS
+CC      = arm-linux-gnueabihf-gcc
+AR      = arm-linux-gnueabihf-ar
+SYSROOT = $(HOME)/mnt/penguin
+CFLAGS += -mfloat-abi=hard -march=armv6 -mfpu=vfp -marm --sysroot=$(SYSROOT)
+VC      = $(SYSROOT)/opt/vc
+endif
+
 
 CFLAGS += -Wall \
           -O3 \
@@ -37,16 +52,16 @@ CFLAGS += -Wall \
           -Wno-psabi
 
 INCLUDES = -I./include \
-           -I/opt/vc/include \
-           -I/opt/vc/include/interface/vcos/pthreads \
-           -I/opt/vc/include/interface/vmcs_host/linux \
-           -I/opt/vc/src/hello_pi/libs/ilclient \
-           -I/opt/vc/src/hello_pi/libs/vgfont \
+           -I$(VC)/include \
+           -I$(VC)/include/interface/vcos/pthreads \
+           -I$(VC)/include/interface/vmcs_host/linux \
+           -I$(VC)/src/hello_pi/libs/ilclient \
+           -I$(VC)/src/hello_pi/libs/vgfont
 
-LIB_PATH = -L./lib \
-           -L/opt/vc/lib \
-           -L/opt/vc/src/hello_pi/libs/ilclient \
-           -L/opt/vc/src/hello_pi/libs/vgfont
+LIBRARY_PATH = -L./lib \
+               -L$(VC)/lib \
+               -L$(VC)/src/hello_pi/libs/ilclient \
+               -L$(VC)/src/hello_pi/libs/vgfont
 
 LIBS += -lilclient \
         -lopenmaxil \
@@ -75,7 +90,7 @@ $(LIBRARY): $(OBJ)
 
 $(EXEC): lib
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ main.c $(LIB_PATH) $(LIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ main.c $(LIBRARY_PATH) $(LIBS)
 
 $(BUILD)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)
