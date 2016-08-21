@@ -68,6 +68,7 @@ static GLfloat vertex_coords[4 * 3] =
 	1.0,  1.0,  0.0
 };
 
+/* Basic eye matrix used as default */
 static GLfloat eye[4][4] =
 {
 	{1.f, 0.f, 0.f, 0.f},
@@ -82,16 +83,7 @@ static GLfloat eye[4][4] =
 */
 static void render_sub_tree (NODE node, GLfloat view[4][4])
 {
-	// TODO this is a recursive function, maybe it shouldn't to save on performance
-
-	// printf (" VIEW:\n");
-	// for (int n = 0; n < 4; n ++)
-	// {
-	// 	for (int m = 0; m < 4; m ++)
-	// 		printf ("%6.2f", view[n][m]);
-	// 	printf ("\n");
-	// }
-	// printf ("\n");
+	// TODO this is a recursive function, maybe it shouldn't to save on performance.
 
 	glUniformMatrix4fv (view_uniform, 1, GL_FALSE, (GLfloat*) view);
 	rpi_widget_draw (node->widget);
