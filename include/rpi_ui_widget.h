@@ -1,3 +1,7 @@
+/** --------------------------------------------------------------------------------------------------------
+ *  file: rpi_ui_utils.h
+ *  description: some helpers
+ *  -------------------------------------------------------------------------------------------------------- */
 #ifndef RPI_UI_WIDGET_H_
 #define RPI_UI_WIDGET_H_
 
@@ -58,8 +62,9 @@ typedef struct rpi_widget
 	GLuint  texture;
 	void*   egl_image;
 
+	/* text to be rendered */
 	char text[RPI_MAX_TEXT_LENGTH];
-
+	/* URI to media file */
 	char source[RPI_MAX_TEXT_LENGTH];
 
 	int visible;
@@ -168,10 +173,10 @@ void rpi_widget_set_text (rpi_widget* /* widget */, const char* /* text */, rpi_
  *  Change color and alpha value of a widget.
  */
 void rpi_widget_set_color (rpi_widget* /* widget */,
-                           GLfloat /* r */,
-                           GLfloat /* g */,
-                           GLfloat /* b */,
-                           GLfloat /* a */);
+                           GLfloat     /* r */,
+                           GLfloat     /* g */,
+                           GLfloat     /* b */,
+                           GLfloat     /* a */);
 
 /**
  *  Change widget parent.

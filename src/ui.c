@@ -1,6 +1,8 @@
 #include "rpi_ui.h"
 #include "rpi_ui_widget.h"
+#include "rpi_ui_utils.h"
 #include "rpi_mp.h"
+#include "bcm_host.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,13 +18,14 @@ typedef rpi_widget* WIDGET;
  *  Keep a tree of the widgets in the window.
  *  This struct represents a node in the tree.
  */
-struct widget_node
+typedef struct widget_node
 {
 	WIDGET widget;
 	int    nchildren;
+	int    capacity;
 	struct widget_node** children;
-};
-typedef struct widget_node* NODE;
+}*
+NODE;
 
 /* root node of the widgets */
 static struct widget_node root;
@@ -65,17 +68,45 @@ static GLfloat vertex_coords[4 * 3] =
 	1.0,  1.0,  0.0
 };
 
+static GLfloat eye[4][4] =
+{
+	{1.f, 0.f, 0.f, 0.f},
+	{0.f, 1.f, 0.f, 0.f},
+	{0.f, 0.f, 1.f, 0.f},
+	{0.f, 0.f, 0.f, 1.f},
+};
+
 /**
  *  Render widget connected to node and continue down its children.
  *  Depth first style.
 */
-static void render_sub_tree (NODE node)
+static void render_sub_tree (NODE node, GLfloat view[4][4])
 {
-	// TODO set up correct inherited context in shader
+	// TODO this is a recursive function, maybe it shouldn't to save on performance
+
+	// printf (" VIEW:\n");
+	// for (int n = 0; n < 4; n ++)
+	// {
+	// 	for (int m = 0; m < 4; m ++)
+	// 		printf ("%6.2f", view[n][m]);
+	// 	printf ("\n");
+	// }
+	// printf ("\n");
+
+	glUniformMatrix4fv (view_uniform, 1, GL_FALSE, (GLfloat*) view);
 	rpi_widget_draw (node->widget);
-	// render children
+	// render children within the view of this widget.
+	GLfloat modelview[4][4];
 	for (int i = 0; i < node->nchildren; i ++)
-		render_sub_tree (node->children[i]);
+	{
+		if (!node->children[i]->widget->visible) // make sure widget is visible
+			continue;
+
+		// calculate new view matrix for children, and load to GPU.
+		rpi_ui_matrix_mul (view, node->widget->model, modelview);
+		// render child
+		render_sub_tree (node->children[i], modelview);
+	}
 }
 
 /**
@@ -83,12 +114,29 @@ static void render_sub_tree (NODE node)
  */
 static NODE find_node (WIDGET widget)
 {
+	rpi_ui_queue q;
+	rpi_ui_queue_init (&q, sizeof (NODE));
+	for (int i = 0; i < root.nchildren; i ++)
+		rpi_ui_queue_push (&q, root.children[i]);
+
+	NODE node = NULL, tmp = NULL;
 	int found = 0;
-	while (!found)
+	while (!found && q.length)
 	{
-		found = 1; // TODO implement
+		rpi_ui_queue_pop (&q, &tmp);
+		if (tmp->widget == widget) // we found the node
+		{
+			node = tmp;
+			found = 1;
+		}
+		else // push children to queue
+		{
+			for (int i = 0; i < tmp->nchildren; i ++)
+				rpi_ui_queue_push (&q, tmp->children[i]);
+		}
 	}
-	return NULL;
+	rpi_ui_queue_destroy (&q);
+	return node;
 }
 
 /**
@@ -96,12 +144,13 @@ static NODE find_node (WIDGET widget)
  */
 static void append_to_children (NODE node, NODE child)
 {
-	if ((node->nchildren % N_CHILDREN_ALLOC) == 0)
+	if (node->nchildren == node->capacity)
 	{
 		// we need to allocate a new larger buffer for children.
 		NODE* children = node->children;
-		node->children = malloc (sizeof (NODE) * (node->nchildren + N_CHILDREN_ALLOC));
-		memcpy (node->children, children, node->nchildren);
+		node->capacity += N_CHILDREN_ALLOC;
+		node->children = malloc (sizeof (NODE) * node->capacity);
+		memcpy (node->children, children, node->nchildren * sizeof (NODE));
 		free (children);
 	}
 	// add node to children.
@@ -118,10 +167,11 @@ static NODE new_node (WIDGET widget, NODE parent)
 	// allocate a new node
 	NODE new_node = malloc (sizeof (struct widget_node));
 	new_node->nchildren   = 0;
+	new_node->capacity    = N_CHILDREN_ALLOC;
 	new_node->widget      = widget;
 	new_node->children    = malloc (sizeof (NODE) * N_CHILDREN_ALLOC);
 	// append to parent
-	append_to_children(parent, new_node);
+	append_to_children (parent, new_node);
 	return new_node;
 }
 
@@ -241,7 +291,7 @@ static int compile_shader(const char* source_file, GLuint* shader, GLenum shader
 	fseek (fp, 0, SEEK_END);
 	int file_size = ftell (fp);
 	rewind (fp);
-	char* source = (char*) malloc (file_size);
+	char* source = malloc (file_size);
 	memset (source, 0, file_size);
 
 	if ((result = fread (source, 1, file_size, fp)) != file_size)
@@ -359,6 +409,7 @@ static void init_opengl ()
 
 	// get view matrix uniform location.
 	view_uniform = glGetUniformLocation (program, "view");
+	glUniformMatrix4fv (view_uniform, 1, GL_FALSE, (GLfloat*) eye);
 
 	// generate our default white texture.
 	GLbyte white[4] = {0xff, 0xff, 0xff, 0xff};
@@ -446,7 +497,7 @@ void rpi_render_screen ()
 	glLoadIdentity  ();
 	// draw widgets !
 	for (int i = 0; i < root.nchildren; i ++)
-		render_sub_tree (root.children[i]);
+		render_sub_tree (root.children[i], eye);
 	eglSwapBuffers  (display, surface);
 }
 
@@ -475,26 +526,18 @@ int rpi_widget_init (WIDGET widget, WIDGET parent)
 	// no texture
 	widget->texture = default_texture;
 	widget->egl_image = NULL;
-	// eye matrix
-	memset (widget->model, 0, sizeof (GLfloat[4][4]));
-	widget->model[0][0] = 1.f;
-	widget->model[1][1] = 1.f;
-	widget->model[2][2] = 1.f;
-	widget->model[3][3] = 1.f;
+	// default to visible
+	widget->visible = 1;
+	// eye as model matrix
+	memcpy (widget->model, eye, sizeof (GLfloat) * 16);
 
 	memset (widget->text, 0, RPI_MAX_TEXT_LENGTH);
 	memset (widget->source, 0, RPI_MAX_TEXT_LENGTH);
 
 	widget->parent = parent;
 	// add to node tree
-	// no parent, add to root
-	NODE parent_node = &root;
-	if (parent != NULL)
-	{
-		// traverse tree looking for the node representing the parent
-		parent_node = find_node (parent);
-	}
-	// add the widget to the tree
+	// no parent, add to root, else look for the parent in the tree
+	NODE parent_node = parent == NULL ? &root : find_node (parent);
 	new_node (widget, parent_node);
 
 	return 0;
