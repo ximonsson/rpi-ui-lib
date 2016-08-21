@@ -1,8 +1,8 @@
-/**
+/** ----------------------------------------------------------------------------------
  *   File: fragment.frag
  *   Description: Fragment shader source.
- */
-precision highp float;
+ *  ---------------------------------------------------------------------------------- */
+precision mediump float;
 
 uniform sampler2D tex;
 

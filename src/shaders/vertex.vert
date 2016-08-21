@@ -1,7 +1,7 @@
-/**
+/** ----------------------------------------------------------------------------------
  *   File: vertex.vert
  *   Description: Vertex shader source.
- */
+ *  ---------------------------------------------------------------------------------- */
 
 // input vertex coordinate.
 attribute vec3 vertex;
@@ -32,7 +32,7 @@ const mat4 projection = mat4
 
 void main ()
 {
-	gl_Position = projection * /* view * */  model * vec4 (vertex, 1.0);
+	gl_Position = projection * view * model * vec4 (vertex, 1.0);
 	texture_coords = texture_coords_in;
 	color = color_in;
 }
