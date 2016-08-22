@@ -85,5 +85,9 @@ void rpi_ui_queue_push (rpi_ui_queue* /* queue */, void* /* item */) ;
  */
 void rpi_ui_queue_pop (rpi_ui_queue* /* queue */, void* /* item */) ;
 
+/**
+ *  rpi_ui_queue_reset
+ */
+void rpi_ui_queue_reset (rpi_ui_queue* /* queue */) ;
 
 #endif // RPI_UI_UTILS_H_

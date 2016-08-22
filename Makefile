@@ -4,7 +4,7 @@ SRCDIR   = src
 BUILD    = build
 LIB      = lib
 LIBRARY  = $(LIB)/librpi_ui.a
-SRC      = ui.c widget.c image.c matrix.c queue.c
+SRC      = ui.c widget.c image.c matrix.c queue.c text.c
 OBJ      = $(addprefix $(BUILD)/, $(SRC:.c=.o))
 BIN      = bin
 VC       = /opt/vc
@@ -60,7 +60,8 @@ INCLUDES = -I./include \
            -I$(VC)/include/interface/vcos/pthreads \
            -I$(VC)/include/interface/vmcs_host/linux \
            -I$(VC)/src/hello_pi/libs/ilclient \
-           -I$(VC)/src/hello_pi/libs/vgfont
+           -I$(VC)/src/hello_pi/libs/vgfont \
+           -I/usr/include/freetype2
 
 LIBRARY_PATH = -L./lib \
                -L$(PLAYER)/lib \
@@ -82,6 +83,7 @@ LIBS += -lrpi_ui \
         -lavcodec \
         -lavutil \
         -lavformat \
+        -lfreetype \
         -lm
 
 ARCMD = rcs
@@ -89,34 +91,33 @@ ARCMD = rcs
 
 all: lib
 
-lib: $(OBJ)
-	@mkdir -p $(@D)
-	$(AR) $(ARCMD) $(LIBRARY) $^
+lib: $(LIBRARY)
 
-$(BIN)/test_%: test/%.c
+$(LIBRARY): $(OBJ)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(LIBRARY_PATH) $(LIBS)
-
-$(BIN)/example_%: example/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $< $(LIBRARY_PATH) $(LIBS)
+	$(AR) $(ARCMD) $@ $^
 
 $(BUILD)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
+clean:
+	rm -rf $(BUILD)/*.o $(BIN)/* $(LIBRARY)
+
 # PHONY targets
-.PHONY: $(BIN)/test_% $(BIN)/example_% clean install
+.PHONY: clean
 
 install:
 	@scp $(BIN)/* penguin:projects/rpi-ui-lib/bin/
 	@scp $(SRCDIR)/shaders/* penguin:projects/rpi-ui-lib/src/shaders/
 
 # create tests
-tests: lib $(addprefix $(BIN)/test_, $(TESTS))
+tests: lib $(TESTS)
 
+examples: lib $(EXAMPLES)
 
-examples: lib $(addprefix $(BIN)/example_, $(EXAMPLES))
+$(EXAMPLES):
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(BIN)/example_$@ example/$@.c $(LIBRARY_PATH) $(LIBS)
 
-clean:
-	rm -rf $(BUILD)/*.o $(BIN)/* $(LIBRARY)
+$(TESTS):
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(BIN)/test_$@ test/$@.c $(LIBRARY_PATH) $(LIBS)
