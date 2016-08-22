@@ -8,8 +8,8 @@
 #include <stdio.h>
 
 #define LCD 0
-#define FRAGMENT_SHADER_FILE "src/shaders/fragment.frag"
-#define VERTEX_SHADER_FILE "src/shaders/vertex.vert"
+#define FRAGMENT_SHADER_FILE "src/shaders/fragment.glsl"
+#define VERTEX_SHADER_FILE "src/shaders/vertex.glsl"
 #define N_CHILDREN_ALLOC 8
 
 typedef rpi_widget* WIDGET;
@@ -106,6 +106,7 @@ static void render_sub_tree (NODE node, GLfloat view[4][4])
  */
 static NODE find_node (WIDGET widget)
 {
+	// TODO should there be one queue that is reused each time this function is called?
 	rpi_ui_queue q;
 	rpi_ui_queue_init (&q, sizeof (NODE));
 	for (int i = 0; i < root.nchildren; i ++)
