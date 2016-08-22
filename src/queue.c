@@ -40,11 +40,25 @@ void rpi_ui_queue_push (QUEUE queue, ITEM item)
 	if (queue->length == queue->capacity)
 	{
 		// allocate larger buffer
-		// TODO implement
+		unsigned char* tmp = queue->items;
+		size_t         off = queue->first - queue->items;
+		size_t         tot = queue->capacity * queue->item_size - off;
+
+		queue->capacity += QUEUE_SIZE;
+		queue->items = malloc (queue->capacity * queue->item_size);
+		memcpy (queue->items, queue->first, tot);
+		memcpy (queue->items + tot, tmp, off);
+
+		queue->first = queue->items;
+		queue->last  = queue->items + queue->length * queue->item_size;
+
+		free (tmp);
 	}
+	// copy value to queue
 	queue->length ++;
 	memcpy (queue->last, &item, queue->item_size);
 	queue->last += queue->item_size;
+
 	// loop last pointer
 	if (queue->last == queue->items + queue->capacity * queue->item_size)
 		queue->last = queue->items;
