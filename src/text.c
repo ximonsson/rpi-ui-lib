@@ -2,6 +2,7 @@
 #include FT_FREETYPE_H
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 
 
 FT_Library   library = NULL;    // FreeType library
@@ -92,17 +93,29 @@ int rpi_ui_text_load_font (const char* filepath, size_t size)
 }
 
 
-int rpi_ui_text_render (const char* txt, size_t length)
+int rpi_ui_text_render (const char* txt, size_t length, uint8_t** bp, int width, uint32_t color)
 {
+	int column = 0;
 	for (size_t i = 0; i < length; i ++)
 	{
 		load_glyph (txt[i]);
+		if (txt[i] == '\n' || column >= width) // TODO column + glyph.width >= width
+		{
+			// new line
+			*bp -= column;
+			*bp += width * 20; // TODO change 20 to actual line height
+			column = 0;
+			if (txt[i] == '\n')
+				continue;
+		}
+		rpi_ui_text_render_glyph (*bp, width, color);
+		column += 20; // TODO change to actual glyph width
 	}
 	return 0;
 }
 
 
-void rpi_ui_text_set_color (unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+void rpi_ui_text_render_glyph (uint8_t* bp, int width, uint32_t color)
 {
 
 }
